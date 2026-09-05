@@ -46,10 +46,16 @@ void Object3DToolbox::scale(Object3D& object, Vector3 multiplier) const {
 
 AudioFXToolbox::AudioFXToolbox() : Toolbox("Audio FX Toolbox") {}
 ToolboxKind AudioFXToolbox::kind() const { return ToolboxKind::AudioFX; }
-bool AudioFXToolbox::preview(AudioFX& effect) const {
+bool AudioFXToolbox::preview(AudioFX& effect, AudioPlayback& standardPlayback,
+                             SpatialAudioPlayback* spatialPlayback) const {
+    const bool spatialized = effect.isSpatialized();
+    const float gain = effect.gain();
     effect.setSpatialized(spatialPreview);
     effect.setGain(std::clamp(previewGain, 0.0f, 1.0f));
-    return effect.play();
+    const bool played = effect.play(standardPlayback, spatialPlayback);
+    effect.setGain(gain);
+    effect.setSpatialized(spatialized);
+    return played;
 }
 void AudioFXToolbox::setPosition(AudioFX& effect, const Vector3& position) const { effect.setPosition(position); }
 

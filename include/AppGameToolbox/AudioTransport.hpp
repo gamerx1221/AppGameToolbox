@@ -1,33 +1,15 @@
 #pragma once
 
-#include <memory>
-#include <string>
+#include "AudioPlayback.hpp"
 
 namespace appgametoolbox {
 
-class AudioTransport {
+// A playback backend that exposes a sample-accurate timeline for game sync.
+class AudioTransport : public AudioPlayback {
 public:
-    AudioTransport();
-    ~AudioTransport();
-    AudioTransport(const AudioTransport&) = delete;
-    AudioTransport& operator=(const AudioTransport&) = delete;
-
-    bool load(const char* pathOrUrl);
-    bool play();
-    void pause();
-    void stop();
-    bool seek(double seconds);
-    bool isLoaded() const;
-    bool isPlaying() const;
-    double currentTime() const;
-    double duration() const;
-    void setVolume(float volume);
-    float volume() const;
-    const std::string& lastError() const;
-
-private:
-    class Impl;
-    std::unique_ptr<Impl> m_impl;
+    virtual bool seek(double seconds) = 0;
+    virtual double currentTime() const = 0;
+    virtual double duration() const = 0;
 };
 
 } // namespace appgametoolbox

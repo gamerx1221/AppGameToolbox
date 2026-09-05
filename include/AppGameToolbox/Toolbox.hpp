@@ -52,7 +52,8 @@ public:
     ToolboxKind kind() const override;
     float previewGain = 1.0f;
     bool spatialPreview = false;
-    bool preview(AudioFX& effect) const;
+    bool preview(AudioFX& effect, AudioPlayback& standardPlayback,
+                 SpatialAudioPlayback* spatialPlayback = nullptr) const;
     void setPosition(AudioFX& effect, const Vector3& position) const;
 };
 
