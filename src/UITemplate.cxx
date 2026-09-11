@@ -70,7 +70,25 @@ bool UITemplate::parseHTML(std::string html) {
             [](unsigned char c) { return std::isspace(c) != 0; }).base();
         tagName.erase(last, tagName.end());
 
-        if (!tagName.empty() && tagName[0] == '/') {
+            // extract onclick attribute from the tag
+            size_t onclickPos = tagContent.find("onclick=");
+            if (onclickPos != std::string::npos) {
+                size_t start = onclickPos + 8; // skip "onclick="
+                size_t end = tagContent.find('"', start);
+                if (end != std::string::npos) {
+                    std::string onclickVal = tagContent.substr(start, end - start);
+                    // store onclick in the node properties
+                    if (!nodeStack.empty()) {
+                        nodeStack.top()->properties["onclick"] = onclickVal;
+                        nodeStack.top()->properties["eventName"] = "click";
+                    } else {
+                        m_root.properties["onclick"] = onclickVal;
+                        m_root.properties["eventName"] = "click";
+                    }
+                }
+            }
+
+                if (!tagName.empty() && tagName[0] == '/') {
             // closing tag
             std::string tagName = tagContent.substr(1);
             // pop stack until we find matching opening
@@ -317,4 +335,26 @@ void UITemplate::emitCommands(const TemplateNode& node, Render2DRecorder& record
     }
 }
 
+
+void UITemplate::setEventCallback(EventCallbackC cb) {
+    m_eventCallbackC = cb;
+    m_eventCallbackStd = nullptr;
+}
+
+void UITemplate::setEventCallback(EventCallbackStd stdCb) {
+    m_eventCallbackStd = stdCb;
+    m_eventCallbackC = nullptr;
+}
+
+void UITemplate::fireEvent(const char* name, int eventID) {
+    if (m_eventCallbackC) {
+        m_eventCallbackC(name, eventID);
+    }
+}
+
+void UITemplate::fireEventStd(const std::string& name, int eventID) {
+    if (m_eventCallbackStd) {
+        m_eventCallbackStd(name, eventID);
+    }
+}
 } // namespace appgametoolbox

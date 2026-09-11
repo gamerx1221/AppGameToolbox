@@ -73,6 +73,22 @@ void Render2DRecorder::strokeRect(const Rect& rect, Color color, double lineWidt
     if (canRecord()) m_commands.emplace_back(StrokeRect2DCommand{rect, color, std::max(0.0, lineWidth)});
 }
 
+void Render2DRecorder::fillRoundedRect(const Rect& rect, Color color, double radius) {
+    if (canRecord()) m_commands.emplace_back(FillRoundedRect2DCommand{rect, color, std::max(0.0, radius)});
+}
+
+void Render2DRecorder::strokeRoundedRect(const Rect& rect, Color color, double radius, double lineWidth) {
+    if (canRecord()) m_commands.emplace_back(StrokeRoundedRect2DCommand{rect, color, std::max(0.0, radius), std::max(0.0, lineWidth)});
+}
+
+void Render2DRecorder::drawBoxShadow(const Rect& rect, Color color, Point offset, double blurRadius, double spread, double radius) {
+    if (canRecord()) m_commands.emplace_back(DrawBoxShadow2DCommand{rect, color, offset, std::max(0.0, blurRadius), spread, std::max(0.0, radius)});
+}
+
+void Render2DRecorder::fillLinearGradient(const Rect& rect, Point start, Point end, Color startColor, Color endColor, double radius) {
+    if (canRecord()) m_commands.emplace_back(FillLinearGradient2DCommand{rect, start, end, startColor, endColor, std::max(0.0, radius)});
+}
+
 void Render2DRecorder::drawPath(Render2DResourceId path, Color color, double lineWidth, bool stroke) {
     if (canRecord()) m_commands.emplace_back(DrawPath2DCommand{path, color, std::max(0.0, lineWidth), stroke});
 }
@@ -155,6 +171,10 @@ bool Render2DPlayer::playbackRange(const std::vector<Render2DCommand>& commands,
             else if constexpr (std::is_same_v<Command, SetBlendMode2DCommand>) backend.setBlendMode(command.mode);
             else if constexpr (std::is_same_v<Command, FillRect2DCommand>) backend.fillRect(command);
             else if constexpr (std::is_same_v<Command, StrokeRect2DCommand>) backend.strokeRect(command);
+            else if constexpr (std::is_same_v<Command, FillRoundedRect2DCommand>) backend.fillRoundedRect(command);
+            else if constexpr (std::is_same_v<Command, StrokeRoundedRect2DCommand>) backend.strokeRoundedRect(command);
+            else if constexpr (std::is_same_v<Command, DrawBoxShadow2DCommand>) backend.drawBoxShadow(command);
+            else if constexpr (std::is_same_v<Command, FillLinearGradient2DCommand>) backend.fillLinearGradient(command);
             else if constexpr (std::is_same_v<Command, DrawPath2DCommand>) backend.drawPath(command);
             else if constexpr (std::is_same_v<Command, DrawImage2DCommand>) backend.drawImage(command);
             else if constexpr (std::is_same_v<Command, DrawText2DCommand>) backend.drawText(command);

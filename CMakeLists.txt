@@ -8,6 +8,7 @@ add_library(AppGameToolbox STATIC
     src/Toolbox.cxx
     src/AudioSyncSystem.cxx
     src/AudioFX.cxx
+    src/Effects.cxx
     src/Render2D.cxx
     src/HtmlCss.cxx
     src/UITemplate.cxx
@@ -19,8 +20,10 @@ target_include_directories(AppGameToolbox PUBLIC "${CMAKE_CURRENT_SOURCE_DIR}/in
 if(CMAKE_PROJECT_NAME STREQUAL PROJECT_NAME)
     include(CTest)
     if(BUILD_TESTING)
-        add_executable(AppGameToolboxTests tests/Render2DTests.cxx tests/HtmlCssTests.cxx tests/UITemplateTests.cxx)
+        add_executable(AppGameToolboxTests tests/Render2DTests.cxx tests/EffectsTests.cxx tests/HtmlCssTests.cxx tests/UITemplateTests.cxx)
         target_link_libraries(AppGameToolboxTests PRIVATE AppGameToolbox)
+        target_compile_definitions(AppGameToolboxTests PRIVATE
+            APP_GAME_TOOLBOX_FIXTURE_DIR="${CMAKE_CURRENT_SOURCE_DIR}/tests/fixtures")
         add_test(NAME AppGameToolboxTests COMMAND AppGameToolboxTests)
     endif()
 endif()

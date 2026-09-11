@@ -15,6 +15,24 @@ using Event = int; // placeholder for event type IDs
 
 using EventMap = std::map<std::string, Event>;
 
+// Event identifiers for UI interactions
+enum class UIEvent : int {
+    None = 0,
+    Click,        // button/tap activation
+    Change,       // value/input change
+    FocusGain,    // element received focus
+    FocusLoss,    // element lost focus
+    DragStart,    // drag gesture began
+    DragEnd,      // drag gesture ended
+    HoverEnter,   // pointer entered element
+    HoverLeave    // pointer left element
+};
+
+// Callback type: void(const char* name, int eventID)
+// Event callback types
+using EventCallbackC = void(*)(const char* name, int eventID);  // C-style function pointer
+using EventCallbackStd = std::function<void(const std::string& name, int eventID)>;  // std::function alternative
+
 using Property = std::variant<
     bool,
     int,
@@ -28,6 +46,7 @@ using Property = std::variant<
 >;
 
 using PropertyMap = std::map<std::string, Property>;
+
 
 struct Style {
     Color color = {1.0f, 1.0f, 1.0f, 1.0f};
@@ -75,6 +94,20 @@ public:
     // Update a node property by name path (e.g., "children.0.text")
     bool setProperty(std::string path, Property value);
 
+    // --- Event system ---
+    // Set a callback that fires when nodes emit events (e.g., button click).
+    // Callback signature: void(const char* name, int eventID)
+    // May be called zero or more times; safe to call even if not set.
+    void setEventCallback(EventCallbackC cb);  // C-function pointer
+    void setEventCallback(EventCallbackStd stdCb);  // std::function alternative
+
+    // Fire an event programmatically. Will call the registered callback if any.
+    // Typical use: emit from emitCommands when a user-interactive node is activated.
+    EventCallbackC m_eventCallbackC = nullptr;  // C-function pointer
+    EventCallbackStd m_eventCallbackStd;  // std::function alternative  // Fires via C-function pointer callback
+    void fireEvent(const char* name, int eventID);  // Fires via C-function pointer
+    void fireEventStd(const std::string& name, int eventID);  // Fires via std::function
+
     const std::string& lastError() const { return m_error; }
 
 private:
@@ -82,6 +115,9 @@ private:
     TemplateNode m_root;
     std::string m_error;
     std::uint64_t m_documentVersion = 0;
+
+    // Optional callback fired when events are emitted (e.g., button click).
+    // Set via setEventCallback(); may be null if no handler is registered.
 
     bool parseHTML(std::string html);
     bool parseCSS(std::string css);

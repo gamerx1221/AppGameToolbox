@@ -32,6 +32,24 @@ struct SetOpacity2DCommand { float opacity = 1.0f; };
 struct SetBlendMode2DCommand { BlendMode2D mode = BlendMode2D::SourceOver; };
 struct FillRect2DCommand { Rect rect; Color color; };
 struct StrokeRect2DCommand { Rect rect; Color color; double lineWidth = 1.0; };
+struct FillRoundedRect2DCommand { Rect rect; Color color; double radius = 0.0; };
+struct StrokeRoundedRect2DCommand { Rect rect; Color color; double radius = 0.0; double lineWidth = 1.0; };
+struct DrawBoxShadow2DCommand {
+    Rect rect;
+    Color color;
+    Point offset;
+    double blurRadius = 0.0;
+    double spread = 0.0;
+    double radius = 0.0;
+};
+struct FillLinearGradient2DCommand {
+    Rect rect;
+    Point start;
+    Point end;
+    Color startColor;
+    Color endColor;
+    double radius = 0.0;
+};
 struct DrawPath2DCommand { Render2DResourceId path = 0; Color color; double lineWidth = 1.0; bool stroke = false; };
 struct DrawImage2DCommand {
     Render2DResourceId image = 0;
@@ -66,6 +84,10 @@ using Render2DCommand = std::variant<
     SetBlendMode2DCommand,
     FillRect2DCommand,
     StrokeRect2DCommand,
+    FillRoundedRect2DCommand,
+    StrokeRoundedRect2DCommand,
+    DrawBoxShadow2DCommand,
+    FillLinearGradient2DCommand,
     DrawPath2DCommand,
     DrawImage2DCommand,
     DrawText2DCommand,
@@ -104,6 +126,10 @@ public:
     void setBlendMode(BlendMode2D mode);
     void fillRect(const Rect& rect, Color color);
     void strokeRect(const Rect& rect, Color color, double lineWidth = 1.0);
+    void fillRoundedRect(const Rect& rect, Color color, double radius);
+    void strokeRoundedRect(const Rect& rect, Color color, double radius, double lineWidth = 1.0);
+    void drawBoxShadow(const Rect& rect, Color color, Point offset, double blurRadius, double spread, double radius);
+    void fillLinearGradient(const Rect& rect, Point start, Point end, Color startColor, Color endColor, double radius = 0.0);
     void drawPath(Render2DResourceId path, Color color, double lineWidth = 1.0, bool stroke = false);
     void drawImage(Render2DResourceId image, const Rect& destination);
     void drawImage(Render2DResourceId image, const Rect& source, const Rect& destination);
@@ -146,6 +172,10 @@ public:
     virtual void setBlendMode(BlendMode2D mode) = 0;
     virtual void fillRect(const FillRect2DCommand& command) = 0;
     virtual void strokeRect(const StrokeRect2DCommand& command) = 0;
+    virtual void fillRoundedRect(const FillRoundedRect2DCommand& command) = 0;
+    virtual void strokeRoundedRect(const StrokeRoundedRect2DCommand& command) = 0;
+    virtual void drawBoxShadow(const DrawBoxShadow2DCommand& command) = 0;
+    virtual void fillLinearGradient(const FillLinearGradient2DCommand& command) = 0;
     virtual void drawPath(const DrawPath2DCommand& command) = 0;
     virtual void drawImage(const DrawImage2DCommand& command) = 0;
     virtual void drawText(const DrawText2DCommand& command) = 0;

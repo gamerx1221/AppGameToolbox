@@ -5,6 +5,7 @@
 #include <vector>
 
 void runHtmlCssTests();
+void runEffectsTests();
 void testBasicContainerCreation();
 void testTextElementCreation();
 void testButtonElementCreation();
@@ -31,6 +32,10 @@ public:
     void setBlendMode(BlendMode2D) override { events.push_back("blend"); }
     void fillRect(const FillRect2DCommand&) override { events.push_back("fill-rect"); }
     void strokeRect(const StrokeRect2DCommand&) override { events.push_back("stroke-rect"); }
+    void fillRoundedRect(const FillRoundedRect2DCommand&) override { events.push_back("fill-rounded-rect"); }
+    void strokeRoundedRect(const StrokeRoundedRect2DCommand&) override { events.push_back("stroke-rounded-rect"); }
+    void drawBoxShadow(const DrawBoxShadow2DCommand&) override { events.push_back("box-shadow"); }
+    void fillLinearGradient(const FillLinearGradient2DCommand&) override { events.push_back("linear-gradient"); }
     void drawPath(const DrawPath2DCommand&) override { events.push_back("path"); }
     void drawImage(const DrawImage2DCommand&) override { events.push_back("image"); }
     void drawText(const DrawText2DCommand&) override { events.push_back("text"); }
@@ -110,6 +115,7 @@ int main() {
     testCachedPlaybackSkipsContents();
     testNestedCachedLayersReplayInOrder();
     testRecorderRejectsInvalidStructure();
+    runEffectsTests();
     runHtmlCssTests();
     testBasicContainerCreation();
     testTextElementCreation();
