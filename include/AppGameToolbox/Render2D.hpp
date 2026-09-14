@@ -139,6 +139,9 @@ public:
     bool endCachedLayer();
 
     bool finish(RecordedFrame2D& frame);
+    // Transfers the completed immutable frame directly to an adapter. This
+    // avoids copying command vectors when the producer retains the frame.
+    bool finish();
     const std::string& lastError() const;
     bool canRecord() const { return m_error.empty() && !m_finished; }
     std::uint64_t revision() const { return m_revision; }
@@ -151,6 +154,7 @@ protected:
     // state without inspecting the mutable command list.
     virtual void onCommandRecorded(const Render2DCommand&) {}
     virtual void onFinished(const RecordedFrame2D&) {}
+    virtual void onFinished(RecordedFrame2D&& frame) { onFinished(frame); }
     void markChanged() { ++m_revision; }
 
 private:

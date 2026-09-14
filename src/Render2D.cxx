@@ -139,6 +139,17 @@ bool Render2DRecorder::finish(RecordedFrame2D& frame) {
     return true;
 }
 
+bool Render2DRecorder::finish() {
+    if (m_finished) { fail("Recorder has already finished; call reset before recording another frame"); return false; }
+    if (m_saveDepth != 0) fail("Frame finished with unmatched save commands");
+    if (m_layerDepth != 0) fail("Frame finished with unmatched cached layers");
+    if (!m_error.empty()) return false;
+    m_finished = true;
+    markChanged();
+    onFinished(RecordedFrame2D(m_canvasSize, std::move(m_commands)));
+    return true;
+}
+
 const std::string& Render2DRecorder::lastError() const { return m_error; }
 
 bool Render2DPlayer::findCachedLayerEnd(const std::vector<Render2DCommand>& commands,
