@@ -147,6 +147,9 @@ protected:
     // Extension points keep producer-specific invalidation outside the portable
     // immutable frame format.
     virtual void onReset() {}
+    // Called after each command is appended. Subclasses can invalidate derived
+    // state without inspecting the mutable command list.
+    virtual void onCommandRecorded(const Render2DCommand&) {}
     virtual void onFinished(const RecordedFrame2D&) {}
     void markChanged() { ++m_revision; }
 

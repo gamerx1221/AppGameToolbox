@@ -38,6 +38,7 @@ void Render2DRecorder::save() {
     if (!canRecord()) return;
     m_commands.emplace_back(Save2DCommand{});
     ++m_saveDepth;
+    markChanged(); onCommandRecorded(m_commands.back());
 }
 
 void Render2DRecorder::restore() {
@@ -45,66 +46,67 @@ void Render2DRecorder::restore() {
     if (m_saveDepth == 0) { fail("Restore called without a matching save"); return; }
     m_commands.emplace_back(Restore2DCommand{});
     --m_saveDepth;
+    markChanged(); onCommandRecorded(m_commands.back());
 }
 
 void Render2DRecorder::clear(Color color) {
-    if (canRecord()) m_commands.emplace_back(Clear2DCommand{color});
+    if (canRecord()) { m_commands.emplace_back(Clear2DCommand{color}); markChanged(); onCommandRecorded(m_commands.back()); }
 }
 
 void Render2DRecorder::setTransform(const Transform2D& transform) {
-    if (canRecord()) m_commands.emplace_back(SetTransform2DCommand{transform});
+    if (canRecord()) { m_commands.emplace_back(SetTransform2DCommand{transform}); markChanged(); onCommandRecorded(m_commands.back()); }
 }
 
 void Render2DRecorder::clipRect(const Rect& rect) {
-    if (canRecord()) m_commands.emplace_back(ClipRect2DCommand{rect});
+    if (canRecord()) { m_commands.emplace_back(ClipRect2DCommand{rect}); markChanged(); onCommandRecorded(m_commands.back()); }
 }
 
 void Render2DRecorder::setOpacity(float opacity) {
-    if (canRecord()) m_commands.emplace_back(SetOpacity2DCommand{std::clamp(opacity, 0.0f, 1.0f)});
+    if (canRecord()) { m_commands.emplace_back(SetOpacity2DCommand{std::clamp(opacity, 0.0f, 1.0f)}); markChanged(); onCommandRecorded(m_commands.back()); }
 }
 
 void Render2DRecorder::setBlendMode(BlendMode2D mode) {
-    if (canRecord()) m_commands.emplace_back(SetBlendMode2DCommand{mode});
+    if (canRecord()) { m_commands.emplace_back(SetBlendMode2DCommand{mode}); markChanged(); onCommandRecorded(m_commands.back()); }
 }
 
 void Render2DRecorder::fillRect(const Rect& rect, Color color) {
-    if (canRecord()) m_commands.emplace_back(FillRect2DCommand{rect, color});
+    if (canRecord()) { m_commands.emplace_back(FillRect2DCommand{rect, color}); markChanged(); onCommandRecorded(m_commands.back()); }
 }
 
 void Render2DRecorder::strokeRect(const Rect& rect, Color color, double lineWidth) {
-    if (canRecord()) m_commands.emplace_back(StrokeRect2DCommand{rect, color, std::max(0.0, lineWidth)});
+    if (canRecord()) { m_commands.emplace_back(StrokeRect2DCommand{rect, color, std::max(0.0, lineWidth)}); markChanged(); onCommandRecorded(m_commands.back()); }
 }
 
 void Render2DRecorder::fillRoundedRect(const Rect& rect, Color color, double radius) {
-    if (canRecord()) m_commands.emplace_back(FillRoundedRect2DCommand{rect, color, std::max(0.0, radius)});
+    if (canRecord()) { m_commands.emplace_back(FillRoundedRect2DCommand{rect, color, std::max(0.0, radius)}); markChanged(); onCommandRecorded(m_commands.back()); }
 }
 
 void Render2DRecorder::strokeRoundedRect(const Rect& rect, Color color, double radius, double lineWidth) {
-    if (canRecord()) m_commands.emplace_back(StrokeRoundedRect2DCommand{rect, color, std::max(0.0, radius), std::max(0.0, lineWidth)});
+    if (canRecord()) { m_commands.emplace_back(StrokeRoundedRect2DCommand{rect, color, std::max(0.0, radius), std::max(0.0, lineWidth)}); markChanged(); onCommandRecorded(m_commands.back()); }
 }
 
 void Render2DRecorder::drawBoxShadow(const Rect& rect, Color color, Point offset, double blurRadius, double spread, double radius) {
-    if (canRecord()) m_commands.emplace_back(DrawBoxShadow2DCommand{rect, color, offset, std::max(0.0, blurRadius), spread, std::max(0.0, radius)});
+    if (canRecord()) { m_commands.emplace_back(DrawBoxShadow2DCommand{rect, color, offset, std::max(0.0, blurRadius), spread, std::max(0.0, radius)}); markChanged(); onCommandRecorded(m_commands.back()); }
 }
 
 void Render2DRecorder::fillLinearGradient(const Rect& rect, Point start, Point end, Color startColor, Color endColor, double radius) {
-    if (canRecord()) m_commands.emplace_back(FillLinearGradient2DCommand{rect, start, end, startColor, endColor, std::max(0.0, radius)});
+    if (canRecord()) { m_commands.emplace_back(FillLinearGradient2DCommand{rect, start, end, startColor, endColor, std::max(0.0, radius)}); markChanged(); onCommandRecorded(m_commands.back()); }
 }
 
 void Render2DRecorder::drawPath(Render2DResourceId path, Color color, double lineWidth, bool stroke) {
-    if (canRecord()) m_commands.emplace_back(DrawPath2DCommand{path, color, std::max(0.0, lineWidth), stroke});
+    if (canRecord()) { m_commands.emplace_back(DrawPath2DCommand{path, color, std::max(0.0, lineWidth), stroke}); markChanged(); onCommandRecorded(m_commands.back()); }
 }
 
 void Render2DRecorder::drawImage(Render2DResourceId image, const Rect& destination) {
-    if (canRecord()) m_commands.emplace_back(DrawImage2DCommand{image, destination, {}, false});
+    if (canRecord()) { m_commands.emplace_back(DrawImage2DCommand{image, destination, {}, false}); markChanged(); onCommandRecorded(m_commands.back()); }
 }
 
 void Render2DRecorder::drawImage(Render2DResourceId image, const Rect& source, const Rect& destination) {
-    if (canRecord()) m_commands.emplace_back(DrawImage2DCommand{image, destination, source, true});
+    if (canRecord()) { m_commands.emplace_back(DrawImage2DCommand{image, destination, source, true}); markChanged(); onCommandRecorded(m_commands.back()); }
 }
 
 void Render2DRecorder::drawText(Render2DResourceId font, std::string text, Point origin, double fontSize, Color color) {
-    if (canRecord()) m_commands.emplace_back(DrawText2DCommand{font, std::move(text), origin, std::max(0.0, fontSize), color});
+    if (canRecord()) { m_commands.emplace_back(DrawText2DCommand{font, std::move(text), origin, std::max(0.0, fontSize), color}); markChanged(); onCommandRecorded(m_commands.back()); }
 }
 
 bool Render2DRecorder::beginCachedLayer(Render2DCacheKey cacheKey, const Rect& bounds, std::uint64_t contentVersion) {
@@ -112,6 +114,7 @@ bool Render2DRecorder::beginCachedLayer(Render2DCacheKey cacheKey, const Rect& b
     if (cacheKey == 0) { fail("Cached layers require a non-zero cache key"); return false; }
     m_commands.emplace_back(BeginCachedLayer2DCommand{cacheKey, bounds, contentVersion});
     ++m_layerDepth;
+    markChanged(); onCommandRecorded(m_commands.back());
     return true;
 }
 
@@ -120,6 +123,7 @@ bool Render2DRecorder::endCachedLayer() {
     if (m_layerDepth == 0) { fail("End cached layer called without a matching begin cached layer"); return false; }
     m_commands.emplace_back(EndCachedLayer2DCommand{});
     --m_layerDepth;
+    markChanged(); onCommandRecorded(m_commands.back());
     return true;
 }
 
