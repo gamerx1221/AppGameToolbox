@@ -28,6 +28,7 @@ struct Restore2DCommand {};
 struct Clear2DCommand { Color color; };
 struct SetTransform2DCommand { Transform2D transform; };
 struct ClipRect2DCommand { Rect rect; };
+struct ClipRoundedRect2DCommand { Rect rect; double radius = 0.0; };
 struct SetOpacity2DCommand { float opacity = 1.0f; };
 struct SetBlendMode2DCommand { BlendMode2D mode = BlendMode2D::SourceOver; };
 struct FillRect2DCommand { Rect rect; Color color; };
@@ -49,6 +50,15 @@ struct FillLinearGradient2DCommand {
     Color startColor;
     Color endColor;
     double radius = 0.0;
+};
+struct LinearGradientStop2D { double offset = 0.0; Color color; };
+struct FillLinearGradientStops2DCommand {
+    Rect rect;
+    Point start;
+    Point end;
+    std::vector<LinearGradientStop2D> stops;
+    double radius = 0.0;
+    bool repeating = false;
 };
 struct DrawPath2DCommand { Render2DResourceId path = 0; Color color; double lineWidth = 1.0; bool stroke = false; };
 struct DrawImage2DCommand {
@@ -80,6 +90,7 @@ using Render2DCommand = std::variant<
     Clear2DCommand,
     SetTransform2DCommand,
     ClipRect2DCommand,
+    ClipRoundedRect2DCommand,
     SetOpacity2DCommand,
     SetBlendMode2DCommand,
     FillRect2DCommand,
@@ -88,6 +99,7 @@ using Render2DCommand = std::variant<
     StrokeRoundedRect2DCommand,
     DrawBoxShadow2DCommand,
     FillLinearGradient2DCommand,
+    FillLinearGradientStops2DCommand,
     DrawPath2DCommand,
     DrawImage2DCommand,
     DrawText2DCommand,
@@ -123,6 +135,7 @@ public:
     void clear(Color color);
     void setTransform(const Transform2D& transform);
     void clipRect(const Rect& rect);
+    void clipRoundedRect(const Rect& rect, double radius);
     void setOpacity(float opacity);
     void setBlendMode(BlendMode2D mode);
     void fillRect(const Rect& rect, Color color);
@@ -131,6 +144,8 @@ public:
     void strokeRoundedRect(const Rect& rect, Color color, double radius, double lineWidth = 1.0);
     void drawBoxShadow(const Rect& rect, Color color, Point offset, double blurRadius, double spread, double radius);
     void fillLinearGradient(const Rect& rect, Point start, Point end, Color startColor, Color endColor, double radius = 0.0);
+    void fillLinearGradient(const Rect& rect, Point start, Point end, std::vector<LinearGradientStop2D> stops,
+                            double radius = 0.0, bool repeating = false);
     void drawPath(Render2DResourceId path, Color color, double lineWidth = 1.0, bool stroke = false);
     void drawImage(Render2DResourceId image, const Rect& destination);
     void drawImage(Render2DResourceId image, const Rect& source, const Rect& destination);
@@ -185,6 +200,7 @@ public:
     virtual void clear(Color color) = 0;
     virtual void setTransform(const Transform2D& transform) = 0;
     virtual void clipRect(const Rect& rect) = 0;
+    virtual void clipRoundedRect(const ClipRoundedRect2DCommand& command) = 0;
     virtual void setOpacity(float opacity) = 0;
     virtual void setBlendMode(BlendMode2D mode) = 0;
     virtual void fillRect(const FillRect2DCommand& command) = 0;
@@ -193,6 +209,7 @@ public:
     virtual void strokeRoundedRect(const StrokeRoundedRect2DCommand& command) = 0;
     virtual void drawBoxShadow(const DrawBoxShadow2DCommand& command) = 0;
     virtual void fillLinearGradient(const FillLinearGradient2DCommand& command) = 0;
+    virtual void fillLinearGradient(const FillLinearGradientStops2DCommand& command) = 0;
     virtual void drawPath(const DrawPath2DCommand& command) = 0;
     virtual void drawImage(const DrawImage2DCommand& command) = 0;
     virtual void drawText(const DrawText2DCommand& command) = 0;

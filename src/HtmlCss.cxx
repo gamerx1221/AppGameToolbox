@@ -213,28 +213,58 @@ bool parseColor(const std::string& text, Color& color) {
 }
 
 struct GradientDefinition {
-    Color startColor;
-    Color endColor;
+    struct Stop {
+        Color color;
+        std::optional<Length> position;
+    };
+    std::vector<Stop> stops;
     bool horizontal = false;
+    bool repeating = false;
 };
+
+std::vector<std::string> splitTopLevel(const std::string& value) {
+    std::vector<std::string> parts;
+    std::size_t start = 0;
+    int depth = 0;
+    for (std::size_t index = 0; index < value.size(); ++index) {
+        if (value[index] == '(') ++depth;
+        else if (value[index] == ')' && depth > 0) --depth;
+        else if (value[index] == ',' && depth == 0) {
+            parts.push_back(trim(value.substr(start, index - start)));
+            start = index + 1;
+        }
+    }
+    parts.push_back(trim(value.substr(start)));
+    return parts;
+}
 
 bool parseLinearGradient(const std::string& text, GradientDefinition& gradient) {
     const std::string value = lower(trim(text));
-    if (value.rfind("linear-gradient(", 0) != 0 || value.back() != ')') return false;
-    std::vector<std::string> parts;
-    std::size_t position = 16;
-    while (position < value.size() - 1) {
-        const std::size_t comma = value.find(',', position);
-        parts.push_back(trim(value.substr(position, (comma == std::string::npos ? value.size() - 1 : comma) - position)));
-        if (comma == std::string::npos) break;
-        position = comma + 1;
-    }
-    std::size_t colors = 0;
-    if (parts.size() == 3 && (parts[0] == "to right" || parts[0] == "to bottom")) {
+    const char* prefix = value.rfind("repeating-linear-gradient(", 0) == 0 ? "repeating-linear-gradient(" : "linear-gradient(";
+    gradient.repeating = prefix[0] == 'r';
+    const std::size_t prefixLength = std::char_traits<char>::length(prefix);
+    if (value.rfind(prefix, 0) != 0 || value.back() != ')') return false;
+    const std::vector<std::string> parts = splitTopLevel(value.substr(prefixLength, value.size() - prefixLength - 1));
+    std::size_t firstStop = 0;
+    if (!parts.empty() && (parts[0] == "to right" || parts[0] == "to bottom")) {
         gradient.horizontal = parts[0] == "to right";
-        colors = 1;
+        firstStop = 1;
     }
-    return parts.size() == colors + 2 && parseColor(parts[colors], gradient.startColor) && parseColor(parts[colors + 1], gradient.endColor);
+    if (parts.size() - firstStop < 2) return false;
+    gradient.stops.clear();
+    for (std::size_t index = firstStop; index < parts.size(); ++index) {
+        Color color;
+        if (parseColor(parts[index], color)) {
+            gradient.stops.push_back({color, std::nullopt});
+            continue;
+        }
+        const std::size_t space = parts[index].find_last_of(" \t");
+        if (space == std::string::npos || !parseColor(trim(parts[index].substr(0, space)), color)) return false;
+        const Length position = parseLength(parts[index].substr(space + 1));
+        if (position.unit != Length::Unit::Linear) return false;
+        gradient.stops.push_back({color, position});
+    }
+    return true;
 }
 
 std::optional<std::string> parseImageUrl(const std::string& text) {
@@ -317,6 +347,7 @@ public:
     struct Style {
         bool display = true;
         bool absolute = false;
+        bool overflowHidden = false;
         bool cachedLayer = false;
         LayoutMode layoutMode = LayoutMode::Block;
         FlexDirection flexDirection = FlexDirection::Row;
@@ -339,6 +370,8 @@ public:
         Length height;
         Length left;
         Length top;
+        double translateX = 0.0;
+        double translateY = 0.0;
         double marginTop = 0.0;
         double marginRight = 0.0;
         double marginBottom = 0.0;
@@ -368,6 +401,7 @@ public:
     std::string error;
     std::vector<CssCompatibilityWarning> warnings;
     std::unordered_map<HtmlCssNodeId, std::uint8_t> pseudoStates;
+    std::unordered_map<HtmlCssNodeId, std::vector<std::pair<std::string, std::string>>> runtimeDeclarations;
     struct HitTarget { HtmlCssNodeId id; Rect rect; };
     std::vector<HitTarget> hitTargets;
     std::uint64_t documentVersion = 0;
@@ -387,6 +421,7 @@ public:
     bool parseHtml(const std::string& html);
     bool parseCss(const std::string& css);
     bool record(Render2DRecorder& recorder, const Size& viewport);
+    Node* nodeById(HtmlCssNodeId id);
 
 private:
     static std::unordered_map<std::string, std::string> parseAttributes(const std::string& text);
@@ -438,12 +473,46 @@ std::optional<HtmlCssNodeId> HtmlCssPipeline::nodeIdForElementId(const std::stri
     }
     return std::nullopt;
 }
+bool HtmlCssPipeline::setText(HtmlCssNodeId node, std::string text) {
+    Impl::Node* target = m_impl->nodeById(node);
+    if (target == nullptr) return false;
+    target->text = std::move(text);
+    ++m_impl->documentVersion;
+    return true;
+}
+bool HtmlCssPipeline::setStyleProperty(HtmlCssNodeId node, std::string property, std::string value) {
+    if (property.empty() || m_impl->nodeById(node) == nullptr) return false;
+    property = lower(std::move(property));
+    auto& declarations = m_impl->runtimeDeclarations[node];
+    for (auto& declaration : declarations) {
+        if (declaration.first == property) {
+            declaration.second = std::move(value);
+            ++m_impl->documentVersion;
+            return true;
+        }
+    }
+    declarations.push_back({std::move(property), std::move(value)});
+    ++m_impl->documentVersion;
+    return true;
+}
 bool HtmlCssPipeline::setPseudoState(HtmlCssNodeId node, CssPseudoState state, bool enabled) {
     if (node == 0) return false;
     const std::uint8_t bit = static_cast<std::uint8_t>(state);
     std::uint8_t& states = m_impl->pseudoStates[node];
     if (enabled) states |= bit; else states &= static_cast<std::uint8_t>(~bit);
     return true;
+}
+
+HtmlCssPipeline::Impl::Node* HtmlCssPipeline::Impl::nodeById(HtmlCssNodeId id) {
+    if (id == 0) return nullptr;
+    std::vector<Node*> nodes = {root.get()};
+    while (!nodes.empty()) {
+        Node* node = nodes.back();
+        nodes.pop_back();
+        if (node->order == id) return node;
+        for (const auto& child : node->children) nodes.push_back(child.get());
+    }
+    return nullptr;
 }
 std::optional<HtmlCssNodeId> HtmlCssPipeline::hitTest(Point point) const {
     for (auto target = m_impl->hitTargets.rbegin(); target != m_impl->hitTargets.rend(); ++target) {
@@ -662,10 +731,35 @@ void HtmlCssPipeline::Impl::applyDeclaration(Style& style, float& localOpacity, 
         else if (mode != "none") style.layoutMode = LayoutMode::Block;
     }
     else if (property == "position") style.absolute = lower(value) == "absolute";
+    else if (property == "overflow") style.overflowHidden = lower(value) == "hidden";
     else if (property == "width") style.width = parseLength(value);
     else if (property == "height") style.height = parseLength(value);
     else if (property == "left") style.left = parseLength(value);
     else if (property == "top") style.top = parseLength(value);
+    else if (property == "transform") {
+        const std::string transform = lower(trim(value));
+        const auto translate = [&](const char* prefix, double& component) -> bool {
+            const std::size_t length = std::char_traits<char>::length(prefix);
+            if (transform.rfind(prefix, 0) != 0 || transform.back() != ')') return false;
+            const Length offset = parseLength(transform.substr(length, transform.size() - length - 1));
+            if (offset.unit != Length::Unit::Linear || offset.percent != 0.0) return false;
+            component = offset.pixels;
+            return true;
+        };
+        if (!translate("translatex(", style.translateX) && !translate("translatey(", style.translateY)) {
+            if (transform.rfind("translate(", 0) == 0 && transform.back() == ')') {
+                const std::vector<std::string> values = splitTopLevel(transform.substr(10, transform.size() - 11));
+                if (values.size() == 2) {
+                    const Length x = parseLength(values[0]);
+                    const Length y = parseLength(values[1]);
+                    if (x.unit == Length::Unit::Linear && y.unit == Length::Unit::Linear && x.percent == 0.0 && y.percent == 0.0) {
+                        style.translateX = x.pixels;
+                        style.translateY = y.pixels;
+                    }
+                }
+            }
+        }
+    }
     else if (property == "opacity") localOpacity = clampOpacity(number(value, 1.0));
     else if (property == "font-size") style.fontSize = std::max(0.0, resolveLength(parseLength(value), 0.0));
     else if (property == "color" && parseColor(value, color)) style.color = color;
@@ -857,6 +951,8 @@ HtmlCssPipeline::Impl::Style HtmlCssPipeline::Impl::resolveStyle(const Node& nod
         const auto inlineDeclarations = parseDeclarations(*inlineStyle);
         declarations.insert(declarations.end(), inlineDeclarations.begin(), inlineDeclarations.end());
     }
+    if (const auto runtime = runtimeDeclarations.find(node.order); runtime != runtimeDeclarations.end())
+        for (const auto& declaration : runtime->second) declarations.push_back(declaration);
     for (const auto& declaration : declarations) if (declaration.first.rfind("--", 0) == 0) style.variables[declaration.first] = declaration.second;
     for (const auto& declaration : declarations) if (declaration.first.rfind("--", 0) != 0) {
         std::vector<std::string> stack;
@@ -886,8 +982,8 @@ HtmlCssPipeline::Impl::LayoutNode HtmlCssPipeline::Impl::layout(const Node& node
     const double defaultX = document ? parentContent.origin.x : parentContent.origin.x +
         (style.absolute ? resolveLength(style.left, parentWidth) : style.marginLeft);
     const double defaultY = document ? parentContent.origin.y : (style.absolute ? parentContent.origin.y + resolveLength(style.top, parentHeight) : flowY + style.marginTop);
-    const double x = positionedOrigin ? positionedOrigin->x : defaultX;
-    const double y = positionedOrigin ? positionedOrigin->y : defaultY;
+    const double x = (positionedOrigin ? positionedOrigin->x : defaultX) + style.translateX;
+    const double y = (positionedOrigin ? positionedOrigin->y : defaultY) + style.translateY;
     const double width = document ? parentWidth : (allocatedWidth ? std::max(0.0, *allocatedWidth) : std::max(0.0, style.width.unit == Length::Unit::Auto
         ? parentWidth - style.marginLeft - style.marginRight : resolveLength(style.width, parentWidth)));
     const double contentWidth = std::max(0.0, width - style.paddingLeft - style.paddingRight);
@@ -1000,10 +1096,39 @@ void HtmlCssPipeline::Impl::recordNode(const LayoutNode& node, Render2DRecorder&
         }
         if (node.style.gradient) {
             const GradientDefinition& gradient = *node.style.gradient;
-            const Point start = gradient.horizontal ? Point{node.rect.origin.x, node.rect.origin.y} : Point{node.rect.origin.x, node.rect.origin.y};
-            const Point end = gradient.horizontal ? Point{node.rect.origin.x + node.rect.size.width, node.rect.origin.y}
-                                                  : Point{node.rect.origin.x, node.rect.origin.y + node.rect.size.height};
-            recorder.fillLinearGradient(node.rect, start, end, gradient.startColor, gradient.endColor, node.style.borderRadius);
+            const double axisLength = gradient.horizontal ? node.rect.size.width : node.rect.size.height;
+            std::vector<double> offsets(gradient.stops.size(), -1.0);
+            double period = 0.0;
+            for (std::size_t index = 0; index < gradient.stops.size(); ++index) {
+                if (!gradient.stops[index].position) continue;
+                const double resolved = resolveLength(*gradient.stops[index].position, axisLength);
+                offsets[index] = axisLength > 0.0 ? resolved / axisLength : 0.0;
+                if (gradient.repeating) period = std::max(period, resolved);
+            }
+            if (gradient.repeating && period <= 0.0) period = axisLength;
+            if (!offsets.empty()) {
+                if (offsets.front() < 0.0) offsets.front() = 0.0;
+                if (offsets.back() < 0.0) offsets.back() = 1.0;
+            }
+            for (std::size_t index = 1; index + 1 < offsets.size();) {
+                if (offsets[index] >= 0.0) { ++index; continue; }
+                const std::size_t first = index;
+                while (index < offsets.size() && offsets[index] < 0.0) ++index;
+                const std::size_t count = index - first;
+                for (std::size_t offset = 0; offset < count; ++offset)
+                    offsets[first + offset] = offsets[first - 1] + (offsets[index] - offsets[first - 1]) *
+                        static_cast<double>(offset + 1) / static_cast<double>(count + 1);
+            }
+            std::vector<LinearGradientStop2D> stops;
+            stops.reserve(gradient.stops.size());
+            for (std::size_t index = 0; index < gradient.stops.size(); ++index) {
+                const double offset = gradient.repeating && period > 0.0 ? offsets[index] * axisLength / period : offsets[index];
+                stops.push_back({std::clamp(offset, 0.0, 1.0), gradient.stops[index].color});
+            }
+            const Point start = {node.rect.origin.x, node.rect.origin.y};
+            const Point end = gradient.horizontal ? Point{node.rect.origin.x + (gradient.repeating ? period : node.rect.size.width), node.rect.origin.y}
+                                                 : Point{node.rect.origin.x, node.rect.origin.y + (gradient.repeating ? period : node.rect.size.height)};
+            recorder.fillLinearGradient(node.rect, start, end, std::move(stops), node.style.borderRadius, gradient.repeating);
         } else if (node.style.background.a > 0.0f) {
             if (node.style.borderRadius > 0.0) recorder.fillRoundedRect(node.rect, node.style.background, node.style.borderRadius);
             else recorder.fillRect(node.rect, node.style.background);
@@ -1019,6 +1144,10 @@ void HtmlCssPipeline::Impl::recordNode(const LayoutNode& node, Render2DRecorder&
             if (node.style.borderRadius > 0.0)
                 recorder.strokeRoundedRect(borderRect, node.style.borderColor, std::max(0.0, node.style.borderRadius - inset), node.style.borderWidth);
             else recorder.strokeRect(borderRect, node.style.borderColor, node.style.borderWidth);
+        }
+        if (node.style.overflowHidden) {
+            if (node.style.borderRadius > 0.0) recorder.clipRoundedRect(node.rect, node.style.borderRadius);
+            else recorder.clipRect(node.rect);
         }
     }
 
@@ -1127,8 +1256,9 @@ bool HtmlCssPipeline::Impl::parseCss(const std::string& rawCss) {
         return MediaCondition{minimum ? MediaCondition::Kind::MinWidth : MediaCondition::Kind::MaxWidth, width.pixels};
     };
     const auto isSupportedDeclaration = [](const std::string& property) {
-        return property.rfind("--", 0) == 0 || property == "display" || property == "position" || property == "width" ||
+        return property.rfind("--", 0) == 0 || property == "display" || property == "position" || property == "overflow" || property == "width" ||
             property == "height" || property == "left" || property == "top" || property == "opacity" || property == "font-size" ||
+            property == "transform" ||
             property == "color" || property == "background" || property == "background-color" || property == "margin" ||
             property == "padding" || property == "margin-top" || property == "margin-right" || property == "margin-bottom" ||
             property == "margin-left" || property == "padding-top" || property == "padding-right" || property == "padding-bottom" ||
@@ -1213,6 +1343,7 @@ bool HtmlCssPipeline::Impl::load(std::string html, std::string css) {
     error.clear();
     warnings.clear();
     pseudoStates.clear();
+    runtimeDeclarations.clear();
     transitions.clear();
     hitTargets.clear();
     nextNodeOrder = 1;

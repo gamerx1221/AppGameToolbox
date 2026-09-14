@@ -101,7 +101,7 @@ void testJqueryUiSelectorsPseudoStateAndHitTesting() {
 void testCalcMediaAndCompatibilityWarnings() {
     HtmlCssPipeline pipeline;
     assert(pipeline.load("<div id='card'></div>",
-        "#card { width: calc(50% - 10px); background: red; transform: rotate(10deg); }"
+        "#card { width: calc(50% - 10px); background: red; filter: blur(2px); }"
         "@media (min-width: 300px) { #card { background: blue; } }"));
     assert(!pipeline.compatibilityWarnings().empty());
 
@@ -141,8 +141,8 @@ void testBoxDecorationAndBackgroundImageCommands() {
     bool shadow = false;
     bool image = false;
     for (const Render2DCommand& command : frame.commands()) {
-        if (const auto* fill = std::get_if<FillLinearGradient2DCommand>(&command))
-            gradient = fill->rect.size.width == 20.0 && fill->startColor.r == 1.0f && fill->endColor.b == 1.0f && fill->radius == 3.0;
+        if (const auto* fill = std::get_if<FillLinearGradientStops2DCommand>(&command))
+            gradient = fill->rect.size.width == 20.0 && fill->stops.size() == 2 && fill->stops.front().color.r == 1.0f && fill->stops.back().color.b == 1.0f && fill->radius == 3.0;
         else if (const auto* stroke = std::get_if<StrokeRoundedRect2DCommand>(&command))
             border = stroke->lineWidth == 2.0 && stroke->color.g == 1.0f && stroke->radius == 2.0;
         else if (const auto* boxShadow = std::get_if<DrawBoxShadow2DCommand>(&command))
@@ -227,6 +227,58 @@ void testDeterministicAnimationsAndTransitions() {
     assert(transitionedBackground);
 }
 
+void testRetainedTextAndStyleUpdates() {
+    HtmlCssPipeline pipeline;
+    assert(pipeline.load("<div id='track'><span id='label'>Idle</span><div id='fill'></div></div>",
+        "#track { width: 20px; height: 10px; } #label { color: white; font-size: 10px; } #fill { width: 0px; height: 2px; background: red; }"));
+    const auto label = pipeline.nodeIdForElementId("label");
+    const auto fillNode = pipeline.nodeIdForElementId("fill");
+    assert(label && fillNode);
+    assert(pipeline.setText(*label, "Ready"));
+    assert(pipeline.setStyleProperty(*fillNode, "width", "15px"));
+    assert(pipeline.setStyleProperty(*fillNode, "background", "linear-gradient(to right, #ff0000, #0000ff)"));
+
+    Render2DRecorder recorder({40.0, 20.0});
+    assert(pipeline.record(recorder, {40.0, 20.0}));
+    RecordedFrame2D frame;
+    assert(recorder.finish(frame));
+    bool text = false;
+    bool fill = false;
+    for (const Render2DCommand& command : frame.commands()) {
+        if (const auto* draw = std::get_if<DrawText2DCommand>(&command)) text = text || draw->text == "Ready";
+        if (const auto* gradient = std::get_if<FillLinearGradientStops2DCommand>(&command))
+            fill = fill || (gradient->rect.size.width == 15.0 && gradient->stops.back().color.b == 1.0f);
+    }
+    assert(text);
+    assert(fill);
+}
+
+void testAdvancedGradientsAndClipping() {
+    HtmlCssPipeline pipeline;
+    assert(pipeline.load("<div id='card'><div id='gloss'></div></div>",
+        "#card { width: 20px; height: 10px; overflow: hidden; border-radius: 3px; "
+        "background: linear-gradient(to bottom, #ff0000 0%, #00ff00 50%, #0000ff 100%); } "
+        "#gloss { position: absolute; left: 0px; top: 0px; width: 8px; height: 2px; transform: translate(6px, 1px); "
+        "background: repeating-linear-gradient(to right, #ffffff 0px, #ffffff 1px, transparent 1px, transparent 3px); }"));
+    Render2DRecorder recorder({40.0, 20.0});
+    assert(pipeline.record(recorder, {40.0, 20.0}));
+    RecordedFrame2D frame;
+    assert(recorder.finish(frame));
+    bool multiStop = false;
+    bool repeating = false;
+    bool clipped = false;
+    for (const Render2DCommand& command : frame.commands()) {
+        if (const auto* gradient = std::get_if<FillLinearGradientStops2DCommand>(&command)) {
+            multiStop = multiStop || (gradient->stops.size() == 3 && !gradient->repeating);
+            repeating = repeating || gradient->repeating;
+        }
+        clipped = clipped || std::holds_alternative<ClipRoundedRect2DCommand>(command);
+    }
+    assert(multiStop);
+    assert(repeating);
+    assert(clipped);
+}
+
 void testJqueryUiBaseThemeFixture() {
     std::ifstream input(std::string(APP_GAME_TOOLBOX_FIXTURE_DIR) + "/jquery-ui-1.13.2-base-subset.css");
     assert(input.good());
@@ -269,5 +321,7 @@ void runHtmlCssTests() {
     testBoxDecorationAndBackgroundImageCommands();
     testBoundedFlexAndGridLayout();
     testDeterministicAnimationsAndTransitions();
+    testRetainedTextAndStyleUpdates();
+    testAdvancedGradientsAndClipping();
     testJqueryUiBaseThemeFixture();
 }

@@ -48,6 +48,8 @@ public:
     // Runtime state is intentionally retained by the pipeline, while playback
     // remains immutable. Call record() again after changing state.
     std::optional<HtmlCssNodeId> nodeIdForElementId(const std::string& elementId) const;
+    bool setText(HtmlCssNodeId node, std::string text);
+    bool setStyleProperty(HtmlCssNodeId node, std::string property, std::string value);
     bool setPseudoState(HtmlCssNodeId node, CssPseudoState state, bool enabled);
     std::optional<HtmlCssNodeId> hitTest(Point point) const;
 

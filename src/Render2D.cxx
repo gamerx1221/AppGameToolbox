@@ -1,6 +1,7 @@
 #include <AppGameToolbox/Render2D.hpp>
 
 #include <algorithm>
+#include <cmath>
 #include <type_traits>
 #include <utility>
 
@@ -61,6 +62,10 @@ void Render2DRecorder::clipRect(const Rect& rect) {
     if (canRecord()) { m_commands.emplace_back(ClipRect2DCommand{rect}); markChanged(); onCommandRecorded(m_commands.back()); }
 }
 
+void Render2DRecorder::clipRoundedRect(const Rect& rect, double radius) {
+    if (canRecord()) { m_commands.emplace_back(ClipRoundedRect2DCommand{rect, std::max(0.0, radius)}); markChanged(); onCommandRecorded(m_commands.back()); }
+}
+
 void Render2DRecorder::setOpacity(float opacity) {
     if (canRecord()) { m_commands.emplace_back(SetOpacity2DCommand{std::clamp(opacity, 0.0f, 1.0f)}); markChanged(); onCommandRecorded(m_commands.back()); }
 }
@@ -91,6 +96,26 @@ void Render2DRecorder::drawBoxShadow(const Rect& rect, Color color, Point offset
 
 void Render2DRecorder::fillLinearGradient(const Rect& rect, Point start, Point end, Color startColor, Color endColor, double radius) {
     if (canRecord()) { m_commands.emplace_back(FillLinearGradient2DCommand{rect, start, end, startColor, endColor, std::max(0.0, radius)}); markChanged(); onCommandRecorded(m_commands.back()); }
+}
+
+void Render2DRecorder::fillLinearGradient(const Rect& rect, Point start, Point end, std::vector<LinearGradientStop2D> stops,
+                                          double radius, bool repeating) {
+    if (!canRecord()) return;
+    if (stops.size() < 2 || !std::isfinite(start.x) || !std::isfinite(start.y) || !std::isfinite(end.x) || !std::isfinite(end.y)) {
+        fail("Linear gradients require at least two finite stops");
+        return;
+    }
+    for (const LinearGradientStop2D& stop : stops) {
+        if (!std::isfinite(stop.offset) || stop.offset < 0.0 || stop.offset > 1.0) {
+            fail("Linear gradient stop offsets must be within zero and one");
+            return;
+        }
+    }
+    std::sort(stops.begin(), stops.end(), [](const LinearGradientStop2D& left, const LinearGradientStop2D& right) {
+        return left.offset < right.offset;
+    });
+    m_commands.emplace_back(FillLinearGradientStops2DCommand{rect, start, end, std::move(stops), std::max(0.0, radius), repeating});
+    markChanged(); onCommandRecorded(m_commands.back());
 }
 
 void Render2DRecorder::drawPath(Render2DResourceId path, Color color, double lineWidth, bool stroke) {
@@ -186,6 +211,7 @@ bool Render2DPlayer::playbackRange(const std::vector<Render2DCommand>& commands,
             else if constexpr (std::is_same_v<Command, Clear2DCommand>) backend.clear(command.color);
             else if constexpr (std::is_same_v<Command, SetTransform2DCommand>) backend.setTransform(command.transform);
             else if constexpr (std::is_same_v<Command, ClipRect2DCommand>) backend.clipRect(command.rect);
+            else if constexpr (std::is_same_v<Command, ClipRoundedRect2DCommand>) backend.clipRoundedRect(command);
             else if constexpr (std::is_same_v<Command, SetOpacity2DCommand>) backend.setOpacity(command.opacity);
             else if constexpr (std::is_same_v<Command, SetBlendMode2DCommand>) backend.setBlendMode(command.mode);
             else if constexpr (std::is_same_v<Command, FillRect2DCommand>) backend.fillRect(command);
@@ -194,6 +220,7 @@ bool Render2DPlayer::playbackRange(const std::vector<Render2DCommand>& commands,
             else if constexpr (std::is_same_v<Command, StrokeRoundedRect2DCommand>) backend.strokeRoundedRect(command);
             else if constexpr (std::is_same_v<Command, DrawBoxShadow2DCommand>) backend.drawBoxShadow(command);
             else if constexpr (std::is_same_v<Command, FillLinearGradient2DCommand>) backend.fillLinearGradient(command);
+            else if constexpr (std::is_same_v<Command, FillLinearGradientStops2DCommand>) backend.fillLinearGradient(command);
             else if constexpr (std::is_same_v<Command, DrawPath2DCommand>) backend.drawPath(command);
             else if constexpr (std::is_same_v<Command, DrawImage2DCommand>) backend.drawImage(command);
             else if constexpr (std::is_same_v<Command, DrawText2DCommand>) backend.drawText(command);

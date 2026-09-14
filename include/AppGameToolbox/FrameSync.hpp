@@ -23,6 +23,31 @@ public:
     virtual void WaitIdle() = 0;
 };
 
+// CPU renderers complete their work before returning to the caller. This
+// manager gives them the same token contract without introducing a native fence.
+class ImmediateFrameSyncManager final : public IFrameSyncManager {
+public:
+    FrameSyncToken SignalFrame() override {
+        std::lock_guard<std::mutex> lock(m_mutex);
+        return {m_nextToken++};
+    }
+
+    bool IsComplete(FrameSyncToken token) override {
+        if (!token)
+            return false;
+
+        std::lock_guard<std::mutex> lock(m_mutex);
+        return token.value < m_nextToken;
+    }
+
+    void Wait(FrameSyncToken) override {}
+    void WaitIdle() override {}
+
+private:
+    std::mutex m_mutex;
+    std::uint64_t m_nextToken = 1;
+};
+
 // Traits create, signal, query, wait for, and destroy the native fence type.
 // Queue submissions are ordered, so completed tokens form a contiguous range.
 template <typename NativeFence, typename Traits>

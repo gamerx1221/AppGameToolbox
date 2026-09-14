@@ -1,4 +1,5 @@
 #include <AppGameToolbox/Render2D.hpp>
+#include <AppGameToolbox/FrameSync.hpp>
 
 #include <cassert>
 #include <string>
@@ -28,6 +29,7 @@ public:
     void clear(Color) override { events.push_back("clear"); }
     void setTransform(const Transform2D&) override { events.push_back("transform"); }
     void clipRect(const Rect&) override { events.push_back("clip"); }
+    void clipRoundedRect(const ClipRoundedRect2DCommand&) override { events.push_back("clip-rounded"); }
     void setOpacity(float) override { events.push_back("opacity"); }
     void setBlendMode(BlendMode2D) override { events.push_back("blend"); }
     void fillRect(const FillRect2DCommand&) override { events.push_back("fill-rect"); }
@@ -36,6 +38,7 @@ public:
     void strokeRoundedRect(const StrokeRoundedRect2DCommand&) override { events.push_back("stroke-rounded-rect"); }
     void drawBoxShadow(const DrawBoxShadow2DCommand&) override { events.push_back("box-shadow"); }
     void fillLinearGradient(const FillLinearGradient2DCommand&) override { events.push_back("linear-gradient"); }
+    void fillLinearGradient(const FillLinearGradientStops2DCommand&) override { events.push_back("linear-gradient-stops"); }
     void drawPath(const DrawPath2DCommand&) override { events.push_back("path"); }
     void drawImage(const DrawImage2DCommand&) override { events.push_back("image"); }
     void drawText(const DrawText2DCommand&) override { events.push_back("text"); }
@@ -108,6 +111,19 @@ void testRecorderRejectsInvalidStructure() {
     assert(!recorder.lastError().empty());
 }
 
+void testImmediateFrameSync() {
+    ImmediateFrameSyncManager sync;
+    const FrameSyncToken first = sync.SignalFrame();
+    const FrameSyncToken second = sync.SignalFrame();
+    assert(first && second);
+    assert(first.value < second.value);
+    assert(sync.IsComplete(first));
+    assert(sync.IsComplete(second));
+    sync.Wait(first);
+    sync.WaitIdle();
+    assert(!sync.IsComplete({}));
+}
+
 } // namespace
 
 int main() {
@@ -115,6 +131,7 @@ int main() {
     testCachedPlaybackSkipsContents();
     testNestedCachedLayersReplayInOrder();
     testRecorderRejectsInvalidStructure();
+    testImmediateFrameSync();
     runEffectsTests();
     runHtmlCssTests();
     testBasicContainerCreation();
