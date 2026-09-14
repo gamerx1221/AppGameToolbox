@@ -18,10 +18,6 @@ double unit(std::uint32_t seed, std::size_t index, std::uint32_t channel) {
     return static_cast<double>(value) / static_cast<double>(UINT32_MAX);
 }
 
-Point center(const Rect& bounds) {
-    return {bounds.origin.x + bounds.size.width / 2.0, bounds.origin.y + bounds.size.height / 2.0};
-}
-
 void addCircle(EffectFrame& frame, Point point, double radius, Color color, double opacity) {
     frame.primitives.push_back({EffectPrimitiveKind::Circle, color, opacity, 1.0, radius, {point}});
 }
@@ -37,6 +33,8 @@ const char* EffectGenerator::name(EffectKind kind) {
         case EffectKind::AmbientDrift: return "ambient-drift";
         case EffectKind::CrystalBurst: return "crystal-burst";
         case EffectKind::EmberTrail: return "ember-trail";
+        case EffectKind::NavigationMedallion: return "navigation-medallion";
+        case EffectKind::PressRipple: return "press-ripple";
         case EffectKind::SonarPulse: return "sonar-pulse";
         case EffectKind::SparkleOrbit: return "sparkle-orbit";
         case EffectKind::SignalWave: return "signal-wave";
@@ -56,7 +54,7 @@ EffectSpec EffectGenerator::preset(EffectKind kind, std::size_t variant) {
     variant %= 5;
     EffectSpec spec;
     spec.kind = kind;
-    spec.palette = {primary[variant], secondary[variant]};
+    spec.palette = {primary[variant], secondary[variant], secondary[variant]};
     spec.seed = static_cast<std::uint32_t>(0x41c64e6dU + variant * 0x9e3779b9U + static_cast<std::uint32_t>(kind) * 101U);
     spec.particleCount = 24 + variant * 6;
     spec.duration = kind == EffectKind::AmbientDrift ? 0.0 : 1.4 + variant * 0.2;
@@ -65,7 +63,8 @@ EffectSpec EffectGenerator::preset(EffectKind kind, std::size_t variant) {
 
 EffectFrame EffectGenerator::sample(const EffectInstance& instance, const Rect& bounds, double clock) const {
     EffectFrame frame;
-    if (!std::isfinite(clock) || bounds.size.width <= 0.0 || bounds.size.height <= 0.0) return frame;
+    if (!std::isfinite(clock) || !std::isfinite(instance.spec.anchor.x) || !std::isfinite(instance.spec.anchor.y) ||
+        bounds.size.width <= 0.0 || bounds.size.height <= 0.0) return frame;
     const EffectSpec& spec = instance.spec;
     const std::size_t particleCount = std::min<std::size_t>(spec.particleCount, 1024);
     const double elapsed = std::max(0.0, clock - instance.startTime);
@@ -73,7 +72,8 @@ EffectFrame EffectGenerator::sample(const EffectInstance& instance, const Rect& 
     const double time = spec.motion ? elapsed : 0.0;
     const double progress = spec.duration > 0.0 ? std::clamp(time / spec.duration, 0.0, 1.0) : 0.0;
     const double energy = spec.duration > 0.0 ? std::min(1.0, (1.0 - progress) * 4.0) : 1.0;
-    const Point origin = center(bounds);
+    const Point origin = {bounds.origin.x + bounds.size.width * spec.anchor.x,
+                          bounds.origin.y + bounds.size.height * spec.anchor.y};
     const double scale = std::min(bounds.size.width, bounds.size.height);
 
     switch (spec.kind) {
@@ -108,6 +108,28 @@ EffectFrame EffectGenerator::sample(const EffectInstance& instance, const Rect& 
                 addCircle(frame, {x, y}, 1.2 + unit(spec.seed, index, 4) * 1.8, spec.palette.secondary, energy);
             }
             break;
+        case EffectKind::NavigationMedallion:
+            for (std::size_t ring = 0; ring < 3; ++ring)
+                addRing(frame, origin, 95.0 + ring * 36.0, spec.palette.secondary, .12);
+            for (std::size_t index = 0; index < 48; ++index) {
+                const double angle = index * kPi * 2.0 / 48.0 + time * .045;
+                const double outer = index % 4 ? 164.0 : 174.0;
+                frame.primitives.push_back({EffectPrimitiveKind::Line, spec.palette.primary, .35, 1.0, 0.0,
+                    {{origin.x + std::cos(angle) * 159.0, origin.y + std::sin(angle) * 159.0},
+                     {origin.x + std::cos(angle) * outer, origin.y + std::sin(angle) * outer}}});
+            }
+            for (std::size_t index = 0; index < 4; ++index) {
+                const double angle = index * kPi / 2.0;
+                frame.primitives.push_back({EffectPrimitiveKind::Line, spec.palette.primary, .75, 1.0, 0.0,
+                    {{origin.x + std::sin(angle) * 63.0, origin.y + std::cos(angle) * 63.0},
+                     {origin.x + std::sin(angle + kPi / 2.0) * 63.0, origin.y + std::cos(angle + kPi / 2.0) * 63.0}}});
+            }
+            addCircle(frame, origin, 5.0, spec.palette.accent, 1.0);
+            break;
+        case EffectKind::PressRipple:
+            addRing(frame, origin, progress * bounds.size.width * 320.0 / 352.0, spec.palette.primary,
+                    (1.0 - progress) * .5, 2.0);
+            break;
         case EffectKind::SonarPulse:
             for (std::size_t index = 0; index < 4; ++index) {
                 const double phase = std::fmod(progress + index * .25, 1.0);
@@ -126,16 +148,21 @@ EffectFrame EffectGenerator::sample(const EffectInstance& instance, const Rect& 
             }
             break;
         case EffectKind::SignalWave:
+            // These ratios preserve the original GameMenu 420x197 card waveform
+            // while letting the same definition scale to any host bounds.
             for (std::size_t band = 0; band < 3; ++band) {
                 EffectPrimitive wave;
                 wave.kind = EffectPrimitiveKind::Polyline;
-                wave.color = band == 1 ? spec.palette.secondary : spec.palette.primary;
-                wave.opacity = energy * (.35 + band * .12);
-                wave.lineWidth = 1.0 + band * .5;
-                for (std::size_t sample = 0; sample <= 32; ++sample) {
-                    const double x = bounds.origin.x + bounds.size.width * sample / 32.0;
-                    const double phase = sample * .38 + time * (2.0 + band * .35) + band * 1.7;
-                    wave.points.push_back({x, origin.y + std::sin(phase) * scale * (.035 + band * .012)});
+                wave.color = spec.palette.primary;
+                wave.opacity = .16 - band * .04;
+                wave.lineWidth = 1.2;
+                for (std::size_t sample = 0; sample <= 80; ++sample) {
+                    const double u = sample / 80.0;
+                    const double x = bounds.origin.x + bounds.size.width * (18.0 + u * 380.0) / 420.0;
+                    const double y = bounds.origin.y + bounds.size.height * 95.0 / 197.0 +
+                        std::sin(u * 12.0 - time * 3.0 + band * .6) * std::sin(u * 3.141592654) *
+                        scale * (20.0 + band * 9.0) / 197.0;
+                    wave.points.push_back({x, y});
                 }
                 frame.primitives.push_back(std::move(wave));
             }

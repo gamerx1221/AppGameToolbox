@@ -12,6 +12,8 @@ enum class EffectKind {
     AmbientDrift,
     CrystalBurst,
     EmberTrail,
+    NavigationMedallion,
+    PressRipple,
     SonarPulse,
     SparkleOrbit,
     SignalWave,
@@ -22,6 +24,7 @@ enum class EffectPrimitiveKind { Circle, Line, Ring, Polygon, Polyline };
 struct EffectPalette {
     Color primary = {1.0f, 1.0f, 1.0f, 1.0f};
     Color secondary = {1.0f, 1.0f, 1.0f, 1.0f};
+    Color accent = {1.0f, 1.0f, 1.0f, 1.0f};
 };
 
 // The description is renderer-independent and can be stored in markup data,
@@ -32,6 +35,9 @@ struct EffectSpec {
     std::uint32_t seed = 1;
     std::size_t particleCount = 36;
     double duration = 1.8;
+    // Normalized origin within the sampled bounds. This allows input-driven
+    // effects such as ripples to remain independent of host coordinates.
+    Point anchor = {0.5, 0.5};
     bool motion = true;
     bool particles = true;
 };
