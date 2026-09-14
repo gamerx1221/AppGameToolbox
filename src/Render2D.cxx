@@ -21,6 +21,8 @@ void Render2DRecorder::reset(Size canvasSize) {
     m_saveDepth = 0;
     m_layerDepth = 0;
     m_finished = false;
+    markChanged();
+    onReset();
 }
 
 void Render2DRecorder::fail(const char* message) {
@@ -128,6 +130,8 @@ bool Render2DRecorder::finish(RecordedFrame2D& frame) {
     if (!m_error.empty()) return false;
     frame = RecordedFrame2D(m_canvasSize, std::move(m_commands));
     m_finished = true;
+    markChanged();
+    onFinished(frame);
     return true;
 }
 

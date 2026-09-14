@@ -115,6 +115,7 @@ private:
 class Render2DRecorder {
 public:
     explicit Render2DRecorder(Size canvasSize = {});
+    virtual ~Render2DRecorder() = default;
 
     void reset(Size canvasSize);
     void save();
@@ -140,6 +141,14 @@ public:
     bool finish(RecordedFrame2D& frame);
     const std::string& lastError() const;
     bool canRecord() const { return m_error.empty() && !m_finished; }
+    std::uint64_t revision() const { return m_revision; }
+
+protected:
+    // Extension points keep producer-specific invalidation outside the portable
+    // immutable frame format.
+    virtual void onReset() {}
+    virtual void onFinished(const RecordedFrame2D&) {}
+    void markChanged() { ++m_revision; }
 
 private:
     void fail(const char* message);
@@ -151,6 +160,7 @@ private:
     std::size_t m_saveDepth = 0;
     std::size_t m_layerDepth = 0;
     bool m_finished = false;
+    std::uint64_t m_revision = 0;
 };
 
 enum class CachedLayerPlayback2D { ReplayContents, UseCachedLayer };

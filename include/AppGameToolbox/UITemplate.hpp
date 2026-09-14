@@ -3,6 +3,11 @@
 #include "Render2D.hpp"
 #include "Types.hpp"
 
+#if defined(_WIN32)
+#include <functional>
+#else
+#include <functional>
+#endif
 #include <map>
 #include <string>
 #include <vector>
