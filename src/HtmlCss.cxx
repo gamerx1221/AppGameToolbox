@@ -422,6 +422,7 @@ public:
     bool parseCss(const std::string& css);
     bool record(Render2DRecorder& recorder, const Size& viewport);
     Node* nodeById(HtmlCssNodeId id);
+    const Node* nodeById(HtmlCssNodeId id) const;
 
 private:
     static std::unordered_map<std::string, std::string> parseAttributes(const std::string& text);
@@ -495,6 +496,15 @@ bool HtmlCssPipeline::setStyleProperty(HtmlCssNodeId node, std::string property,
     ++m_impl->documentVersion;
     return true;
 }
+bool HtmlCssPipeline::setDataAttribute(HtmlCssNodeId node, std::string key, std::string value) {
+    key = lower(std::move(key));
+    if (key.size() <= 5 || key.rfind("data-", 0) != 0) return false;
+    Impl::Node* target = m_impl->nodeById(node);
+    if (target == nullptr) return false;
+    target->attributes[std::move(key)] = std::move(value);
+    ++m_impl->documentVersion;
+    return true;
+}
 bool HtmlCssPipeline::setPseudoState(HtmlCssNodeId node, CssPseudoState state, bool enabled) {
     if (node == 0) return false;
     const std::uint8_t bit = static_cast<std::uint8_t>(state);
@@ -514,10 +524,33 @@ HtmlCssPipeline::Impl::Node* HtmlCssPipeline::Impl::nodeById(HtmlCssNodeId id) {
     }
     return nullptr;
 }
+const HtmlCssPipeline::Impl::Node* HtmlCssPipeline::Impl::nodeById(HtmlCssNodeId id) const {
+    if (id == 0) return nullptr;
+    std::vector<const Node*> nodes = {root.get()};
+    while (!nodes.empty()) {
+        const Node* node = nodes.back();
+        nodes.pop_back();
+        if (node->order == id) return node;
+        for (const auto& child : node->children) nodes.push_back(child.get());
+    }
+    return nullptr;
+}
 std::optional<HtmlCssNodeId> HtmlCssPipeline::hitTest(Point point) const {
     for (auto target = m_impl->hitTargets.rbegin(); target != m_impl->hitTargets.rend(); ++target) {
         if (point.x >= target->rect.origin.x && point.x <= target->rect.origin.x + target->rect.size.width &&
             point.y >= target->rect.origin.y && point.y <= target->rect.origin.y + target->rect.size.height) return target->id;
+    }
+    return std::nullopt;
+}
+std::optional<std::string> HtmlCssPipeline::attributeAt(Point point, const std::string& key) const {
+    const std::string attributeKey = lower(key);
+    if (attributeKey.size() <= 5 || attributeKey.rfind("data-", 0) != 0) return std::nullopt;
+    const auto hit = hitTest(point);
+    const Impl::Node* node = hit ? m_impl->nodeById(*hit) : nullptr;
+    while (node != nullptr) {
+        const auto found = node->attributes.find(attributeKey);
+        if (found != node->attributes.end()) return found->second;
+        node = node->parent;
     }
     return std::nullopt;
 }

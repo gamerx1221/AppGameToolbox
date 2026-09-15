@@ -253,6 +253,21 @@ void testRetainedTextAndStyleUpdates() {
     assert(fill);
 }
 
+void testDataAttributesResolveFromHitAncestors() {
+    HtmlCssPipeline pipeline;
+    assert(pipeline.load("<div id='card'><span id='label'>Launch</span></div>",
+                         "#card { width: 30px; height: 20px; } #label { position: absolute; left: 4px; top: 4px; width: 12px; height: 8px; }"));
+    const auto card = pipeline.nodeIdForElementId("card");
+    assert(card);
+    assert(!pipeline.setDataAttribute(*card, "id", "unsafe"));
+    assert(pipeline.setDataAttribute(*card, "data-action", "menu.launch"));
+    Render2DRecorder recorder({40.0, 30.0});
+    assert(pipeline.record(recorder, {40.0, 30.0}));
+    assert(pipeline.attributeAt({6.0, 6.0}, "data-action") == std::optional<std::string>("menu.launch"));
+    assert(!pipeline.attributeAt({35.0, 25.0}, "data-action"));
+    assert(!pipeline.attributeAt({6.0, 6.0}, "class"));
+}
+
 void testAdvancedGradientsAndClipping() {
     HtmlCssPipeline pipeline;
     assert(pipeline.load("<div id='card'><div id='gloss'></div></div>",
@@ -322,6 +337,7 @@ void runHtmlCssTests() {
     testBoundedFlexAndGridLayout();
     testDeterministicAnimationsAndTransitions();
     testRetainedTextAndStyleUpdates();
+    testDataAttributesResolveFromHitAncestors();
     testAdvancedGradientsAndClipping();
     testJqueryUiBaseThemeFixture();
 }

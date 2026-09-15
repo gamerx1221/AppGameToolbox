@@ -12,6 +12,7 @@ void testTextElementCreation();
 void testButtonElementCreation();
 void testListElementCreation();
 void testPropertyUpdates();
+void runUIActionsTests();
 
 namespace {
 
@@ -139,4 +140,5 @@ int main() {
     testButtonElementCreation();
     testListElementCreation();
     testPropertyUpdates();
+    runUIActionsTests();
 }

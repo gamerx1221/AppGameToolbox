@@ -50,8 +50,12 @@ public:
     std::optional<HtmlCssNodeId> nodeIdForElementId(const std::string& elementId) const;
     bool setText(HtmlCssNodeId node, std::string text);
     bool setStyleProperty(HtmlCssNodeId node, std::string property, std::string value);
+    // Runtime attribute changes are limited to declarative data-* values.
+    bool setDataAttribute(HtmlCssNodeId node, std::string key, std::string value);
     bool setPseudoState(HtmlCssNodeId node, CssPseudoState state, bool enabled);
     std::optional<HtmlCssNodeId> hitTest(Point point) const;
+    // Resolves an attribute from the hit node or its ancestors after record().
+    std::optional<std::string> attributeAt(Point point, const std::string& key) const;
 
     // Appends the document's resolved layout to recorder. Call finish() on the
     // recorder after all producers have emitted their commands.

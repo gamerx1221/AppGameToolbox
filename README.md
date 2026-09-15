@@ -17,9 +17,27 @@ audio effects, and audio-timeline synchronization.
 - `HtmlCssPipeline` parses a documented HTML/CSS subset into `Render2DRecorder`
   commands, including `render-mode: cached-layer` for cacheable subtrees.
 - `Toolbox` provides 2D, 3D, and audio-FX editing helpers with snapping and preview controls.
+- `UIActions` provides typed, serializable UI command data for navigation, game/session,
+  profile, inventory, mission, feedback, audio/effect, telemetry, custom, sequence, and
+  host-predicate conditional actions. `ActionDispatcher` invokes only registered host
+  handlers; parsing action expressions never executes JavaScript or application code.
 
 The library uses only `.hpp` headers and `.cxx` sources. Platform packages supply
 the concrete audio backends that implement its playback interfaces.
+
+## UI Actions
+
+Construct `UIAction` values with `UIAction::make()`, `custom()`, `sequence()`, and
+`conditional()`. `ActionCatalog` maps stable IDs to validated actions. Register one
+handler per built-in action kind or custom name on `ActionDispatcher`, and supply a
+predicate handler for conditionals. The host owns all state and side effects.
+
+`parseUIActionExpression()` accepts only a restricted literal grammar, for example
+`openPanel('inventory')`, `changeSetting('audio.masterVolume', 0.7)`, and
+`sequence([openPanel('inventory'), playSound('open')])`. Inputs reject unknown calls,
+invalid fields, unsupported escapes, malformed literals, and composition beyond the
+fixed depth/child limits. `serializeUIActionExpression()` produces the same restricted
+format for persistence.
 
 ## HTML/CSS Recording
 
