@@ -2,6 +2,12 @@ cmake_minimum_required(VERSION 3.18)
 
 project(AppGameToolbox LANGUAGES CXX)
 
+if(CMAKE_PROJECT_NAME STREQUAL PROJECT_NAME)
+    include(CTest)
+endif()
+
+option(SQB_AUDIO_PREAMP_BUILD_TESTS "Build SQBAudioPreamp tests" ${BUILD_TESTING})
+
 add_library(AppGameToolbox STATIC
     src/UIElement2D.cxx
     src/Object3D.cxx
@@ -12,16 +18,16 @@ add_library(AppGameToolbox STATIC
     src/Render2D.cxx
     src/HtmlCss.cxx
     src/UITemplate.cxx
-    src/UIActions.cxx
 )
 
 target_compile_features(AppGameToolbox PUBLIC cxx_std_17)
 target_include_directories(AppGameToolbox PUBLIC "${CMAKE_CURRENT_SOURCE_DIR}/include")
 
+add_subdirectory(SQBAudioPreamp)
+
 if(CMAKE_PROJECT_NAME STREQUAL PROJECT_NAME)
-    include(CTest)
     if(BUILD_TESTING)
-        add_executable(AppGameToolboxTests tests/Render2DTests.cxx tests/EffectsTests.cxx tests/HtmlCssTests.cxx tests/UITemplateTests.cxx tests/UIActionsTests.cxx)
+        add_executable(AppGameToolboxTests tests/Render2DTests.cxx tests/EffectsTests.cxx tests/HtmlCssTests.cxx tests/UITemplateTests.cxx)
         target_link_libraries(AppGameToolboxTests PRIVATE AppGameToolbox)
         target_compile_definitions(AppGameToolboxTests PRIVATE
             APP_GAME_TOOLBOX_FIXTURE_DIR="${CMAKE_CURRENT_SOURCE_DIR}/tests/fixtures")
