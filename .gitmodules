@@ -1,0 +1,6 @@
+[submodule "SQBAudioPreamp/third_party/speexdsp"]
+	path = SQBAudioPreamp/third_party/speexdsp
+	url = https://github.com/xiph/speexdsp.git
+[submodule "SQBAudioPreamp/third_party/kissfft"]
+	path = SQBAudioPreamp/third_party/kissfft
+	url = https://github.com/mborgerding/kissfft.git
