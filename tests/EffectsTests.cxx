@@ -87,6 +87,15 @@ void testAnchoredRipple() {
     assert(near(ring.opacity, .25));
 }
 
+void testMenuEffectPalettes() {
+    const EffectSpec crystal = EffectGenerator::preset(EffectKind::CrystalBurst, 0);
+    const EffectSpec ember = EffectGenerator::preset(EffectKind::EmberTrail, 1);
+    const EffectSpec sonar = EffectGenerator::preset(EffectKind::SonarPulse, 2);
+    assert(crystal.palette.primary.b > crystal.palette.primary.r);
+    assert(ember.palette.primary.r > ember.palette.primary.g && ember.palette.primary.g > ember.palette.primary.b);
+    assert(sonar.palette.primary.g > sonar.palette.primary.r && sonar.palette.primary.g > sonar.palette.primary.b);
+}
+
 } // namespace
 
 void runEffectsTests() {
@@ -94,4 +103,5 @@ void runEffectsTests() {
     testMotionAndParticleControls();
     testSignalWaveMatchesMenuGeometry();
     testAnchoredRipple();
+    testMenuEffectPalettes();
 }

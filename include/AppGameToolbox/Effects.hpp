@@ -3,6 +3,7 @@
 #include "Types.hpp"
 
 #include <cstdint>
+#include <optional>
 #include <string>
 #include <vector>
 
@@ -59,6 +60,10 @@ struct EffectPrimitive {
 
 struct EffectFrame {
     bool finished = false;
+    // The host applies this clip around the entire frame so effects anchored to
+    // retained UI do not escape the source element.
+    std::optional<Rect> clip;
+    double clipRadius = 0.0;
     std::vector<EffectPrimitive> primitives;
 };
 

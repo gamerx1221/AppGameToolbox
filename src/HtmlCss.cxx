@@ -1,6 +1,7 @@
 #include <AppGameToolbox/HtmlCss.hpp>
 
 #include <algorithm>
+#include <array>
 #include <cctype>
 #include <cmath>
 #include <cstdint>
@@ -332,7 +333,9 @@ public:
     struct Animation {
         std::string name;
         double duration = 0.0;
+        double delay = 0.0;
         double iterations = 1.0;
+        std::array<double, 4> cubicBezier = {0.0, 0.0, 1.0, 1.0};
     };
 
     struct Keyframe {
@@ -395,6 +398,9 @@ public:
     };
 
     std::unique_ptr<Node> root = std::make_unique<Node>();
+    // Node orders are assigned sequentially while parsing; retain direct lookup
+    // for bindings and input ancestry walks.
+    std::vector<Node*> nodesByOrder;
     std::vector<Rule> rules;
     std::unordered_map<std::string, std::vector<Keyframe>> keyframes;
     ImageResolver imageResolver;
@@ -514,26 +520,10 @@ bool HtmlCssPipeline::setPseudoState(HtmlCssNodeId node, CssPseudoState state, b
 }
 
 HtmlCssPipeline::Impl::Node* HtmlCssPipeline::Impl::nodeById(HtmlCssNodeId id) {
-    if (id == 0) return nullptr;
-    std::vector<Node*> nodes = {root.get()};
-    while (!nodes.empty()) {
-        Node* node = nodes.back();
-        nodes.pop_back();
-        if (node->order == id) return node;
-        for (const auto& child : node->children) nodes.push_back(child.get());
-    }
-    return nullptr;
+    return id < nodesByOrder.size() ? nodesByOrder[static_cast<std::size_t>(id)] : nullptr;
 }
 const HtmlCssPipeline::Impl::Node* HtmlCssPipeline::Impl::nodeById(HtmlCssNodeId id) const {
-    if (id == 0) return nullptr;
-    std::vector<const Node*> nodes = {root.get()};
-    while (!nodes.empty()) {
-        const Node* node = nodes.back();
-        nodes.pop_back();
-        if (node->order == id) return node;
-        for (const auto& child : node->children) nodes.push_back(child.get());
-    }
-    return nullptr;
+    return id < nodesByOrder.size() ? nodesByOrder[static_cast<std::size_t>(id)] : nullptr;
 }
 std::optional<HtmlCssNodeId> HtmlCssPipeline::hitTest(Point point) const {
     for (auto target = m_impl->hitTargets.rbegin(); target != m_impl->hitTargets.rend(); ++target) {
@@ -541,6 +531,72 @@ std::optional<HtmlCssNodeId> HtmlCssPipeline::hitTest(Point point) const {
             point.y >= target->rect.origin.y && point.y <= target->rect.origin.y + target->rect.size.height) return target->id;
     }
     return std::nullopt;
+}
+std::optional<Rect> HtmlCssPipeline::bounds(HtmlCssNodeId node) const {
+    const auto target = std::find_if(m_impl->hitTargets.begin(), m_impl->hitTargets.end(),
+        [node](const Impl::HitTarget& value) { return value.id == node; });
+    return target == m_impl->hitTargets.end() ? std::nullopt : std::optional<Rect>(target->rect);
+}
+std::optional<HtmlCssNodeId> HtmlCssPipeline::attributeNodeAt(Point point, const std::string& key) const {
+    const std::string attributeKey = lower(key);
+    if (attributeKey.size() <= 5 || attributeKey.rfind("data-", 0) != 0) return std::nullopt;
+    const auto hit = hitTest(point);
+    const Impl::Node* node = hit ? m_impl->nodeById(*hit) : nullptr;
+    while (node != nullptr) {
+        if (node->attributes.find(attributeKey) != node->attributes.end()) return node->order;
+        node = node->parent;
+    }
+    return std::nullopt;
+}
+std::optional<std::string> HtmlCssPipeline::dataAttribute(HtmlCssNodeId node, const std::string& key) const {
+    const std::string attributeKey = lower(key);
+    if (attributeKey.size() <= 5 || attributeKey.rfind("data-", 0) != 0) return std::nullopt;
+    const Impl::Node* target = m_impl->nodeById(node);
+    if (target == nullptr) return std::nullopt;
+    const auto found = target->attributes.find(attributeKey);
+    return found == target->attributes.end() ? std::nullopt : std::optional<std::string>(found->second);
+}
+std::vector<HtmlCssNodeId> HtmlCssPipeline::nodesWithDataAttribute(const std::string& key,
+                                                                     const std::string& value) const {
+    const std::string attributeKey = lower(key);
+    if (attributeKey.size() <= 5 || attributeKey.rfind("data-", 0) != 0) return {};
+    std::vector<HtmlCssNodeId> matches;
+    std::vector<const Impl::Node*> nodes = {m_impl->root.get()};
+    while (!nodes.empty()) {
+        const Impl::Node* node = nodes.back();
+        nodes.pop_back();
+        const auto found = node->attributes.find(attributeKey);
+        if (found != node->attributes.end() && found->second == value) matches.push_back(node->order);
+        for (const auto& child : node->children) nodes.push_back(child.get());
+    }
+    return matches;
+}
+std::vector<HtmlCssNodeId> HtmlCssPipeline::nodesWithDataAttributeKey(const std::string& key) const {
+    const std::string attributeKey = lower(key);
+    if (attributeKey.size() <= 5 || attributeKey.rfind("data-", 0) != 0) return {};
+    std::vector<HtmlCssNodeId> matches;
+    std::vector<const Impl::Node*> nodes = {m_impl->root.get()};
+    while (!nodes.empty()) {
+        const Impl::Node* node = nodes.back();
+        nodes.pop_back();
+        if (node->attributes.find(attributeKey) != node->attributes.end()) matches.push_back(node->order);
+        for (const auto& child : node->children) nodes.push_back(child.get());
+    }
+    return matches;
+}
+std::vector<HtmlCssDataAttribute> HtmlCssPipeline::dataAttributesWithPrefix(const std::string& prefix) const {
+    const std::string attributePrefix = lower(prefix);
+    if (attributePrefix.size() <= 5 || attributePrefix.rfind("data-", 0) != 0) return {};
+    std::vector<HtmlCssDataAttribute> matches;
+    std::vector<const Impl::Node*> nodes = {m_impl->root.get()};
+    while (!nodes.empty()) {
+        const Impl::Node* node = nodes.back();
+        nodes.pop_back();
+        for (const auto& attribute : node->attributes)
+            if (attribute.first.rfind(attributePrefix, 0) == 0) matches.push_back({node->order, attribute.first, attribute.second});
+        for (const auto& child : node->children) nodes.push_back(child.get());
+    }
+    return matches;
 }
 std::optional<std::string> HtmlCssPipeline::attributeAt(Point point, const std::string& key) const {
     const std::string attributeKey = lower(key);
@@ -738,6 +794,15 @@ std::optional<HtmlCssPipeline::Impl::Animation> HtmlCssPipeline::Impl::parseAnim
     while (stream >> part) {
         const double seconds = parseSeconds(part);
         if (seconds >= 0.0 && animation.duration == 0.0) animation.duration = seconds;
+        else if (seconds >= 0.0) animation.delay = seconds;
+        else if (lower(part).rfind("cubic-bezier(", 0) == 0 && part.back() == ')') {
+            const std::vector<std::string> values = splitTopLevel(part.substr(13, part.size() - 14));
+            if (values.size() == 4) {
+                try {
+                    for (std::size_t index = 0; index < values.size(); ++index) animation.cubicBezier[index] = std::stod(trim(values[index]));
+                } catch (const std::exception&) { return std::nullopt; }
+            }
+        }
         else if (lower(part) == "infinite") animation.iterations = std::numeric_limits<double>::infinity();
         else if (number(part, -1.0) >= 0.0) animation.iterations = number(part);
     }
@@ -899,7 +964,7 @@ void HtmlCssPipeline::Impl::applyKeyframes(Style& style) const {
     if (!style.animation) return;
     const auto found = keyframes.find(style.animation->name);
     if (found == keyframes.end() || found->second.empty()) return;
-    double progress = time / style.animation->duration;
+    double progress = std::max(0.0, time - style.animation->delay) / style.animation->duration;
     if (std::isfinite(style.animation->iterations)) {
         if (progress >= style.animation->iterations) progress = 1.0;
         else progress -= std::floor(progress);
@@ -911,7 +976,17 @@ void HtmlCssPipeline::Impl::applyKeyframes(Style& style) const {
         if (frame.offset <= progress) before = &frame;
         if (frame.offset >= progress) { after = &frame; break; }
     }
-    const double amount = after->offset <= before->offset ? 0.0 : (progress - before->offset) / (after->offset - before->offset);
+    double amount = after->offset <= before->offset ? 0.0 : (progress - before->offset) / (after->offset - before->offset);
+    const auto& curve = style.animation->cubicBezier;
+    if (curve != std::array<double, 4>{0.0, 0.0, 1.0, 1.0}) {
+        const auto cubic = [](double t, double a, double b) { const double inverse = 1.0 - t; return 3.0 * inverse * inverse * t * a + 3.0 * inverse * t * t * b + t * t * t; };
+        double low = 0.0, high = 1.0;
+        for (int iteration = 0; iteration != 16; ++iteration) {
+            const double candidate = (low + high) * 0.5;
+            if (cubic(candidate, curve[0], curve[2]) < amount) low = candidate; else high = candidate;
+        }
+        amount = cubic((low + high) * 0.5, curve[1], curve[3]);
+    }
     const auto declaration = [](const Keyframe& frame, const char* name) -> const std::string* {
         for (auto item = frame.declarations.rbegin(); item != frame.declarations.rend(); ++item)
             if (item->first == name) return &item->second;
@@ -926,6 +1001,15 @@ void HtmlCssPipeline::Impl::applyKeyframes(Style& style) const {
             style.background = {static_cast<float>(start.r + (end.r - start.r) * amount), static_cast<float>(start.g + (end.g - start.g) * amount),
                                 static_cast<float>(start.b + (end.b - start.b) * amount), static_cast<float>(start.a + (end.a - start.a) * amount)};
         }
+    }
+    if (const std::string* from = declaration(*before, "transform")) if (const std::string* to = declaration(*after, "transform")) {
+        Style start = style;
+        Style end = style;
+        float ignoredOpacity = 1.0f;
+        applyDeclaration(start, ignoredOpacity, "transform", *from);
+        applyDeclaration(end, ignoredOpacity, "transform", *to);
+        style.translateX = start.translateX + (end.translateX - start.translateX) * amount;
+        style.translateY = start.translateY + (end.translateY - start.translateY) * amount;
     }
 }
 
@@ -1224,6 +1308,7 @@ bool HtmlCssPipeline::Impl::parseHtml(const std::string& html) {
     root = std::make_unique<Node>();
     root->tag = "document";
     root->order = 0;
+    nodesByOrder = {root.get()};
     std::vector<Node*> stack = {root.get()};
     std::size_t position = 0;
     while (position < html.size()) {
@@ -1260,6 +1345,7 @@ bool HtmlCssPipeline::Impl::parseHtml(const std::string& html) {
             node->attributes = parseAttributes(split == std::string::npos ? "" : tagText.substr(split + 1));
             Node* rawNode = node.get();
             stack.back()->children.push_back(std::move(node));
+            nodesByOrder.push_back(rawNode);
             if (!selfClosing && !isVoidElement(tag)) stack.push_back(rawNode);
         }
         position = close + 1;
@@ -1379,6 +1465,7 @@ bool HtmlCssPipeline::Impl::load(std::string html, std::string css) {
     runtimeDeclarations.clear();
     transitions.clear();
     hitTargets.clear();
+    nodesByOrder.clear();
     nextNodeOrder = 1;
     if (!parseHtml(html)) return false;
     std::vector<const Node*> pending = {root.get()};

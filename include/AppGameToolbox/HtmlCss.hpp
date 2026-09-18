@@ -24,6 +24,12 @@ struct CssCompatibilityWarning {
     std::string message;
 };
 
+struct HtmlCssDataAttribute {
+    HtmlCssNodeId node = 0;
+    std::string key;
+    std::string value;
+};
+
 // A deterministic HTML/CSS subset that records 2D drawing commands. It supports
 // element, class, ID, descendant, and limited pseudo-state selectors; inline
 // styles; block and absolute layout; colors, opacity, text, images, and cached
@@ -54,6 +60,14 @@ public:
     bool setDataAttribute(HtmlCssNodeId node, std::string key, std::string value);
     bool setPseudoState(HtmlCssNodeId node, CssPseudoState state, bool enabled);
     std::optional<HtmlCssNodeId> hitTest(Point point) const;
+    // Layout bounds are available after record() resolves the document for a viewport.
+    std::optional<Rect> bounds(HtmlCssNodeId node) const;
+    std::optional<HtmlCssNodeId> attributeNodeAt(Point point, const std::string& key) const;
+    std::optional<std::string> dataAttribute(HtmlCssNodeId node, const std::string& key) const;
+    std::vector<HtmlCssNodeId> nodesWithDataAttribute(const std::string& key,
+                                                       const std::string& value) const;
+    std::vector<HtmlCssNodeId> nodesWithDataAttributeKey(const std::string& key) const;
+    std::vector<HtmlCssDataAttribute> dataAttributesWithPrefix(const std::string& prefix) const;
     // Resolves an attribute from the hit node or its ancestors after record().
     std::optional<std::string> attributeAt(Point point, const std::string& key) const;
 
